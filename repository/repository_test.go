@@ -1,20 +1,14 @@
-//
-//  go-unit-test-redis
-//
-//  Copyright © 2020. All rights reserved.
-//
-
 package repository
 
 import (
-	"log"
+	"context"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/elliotchance/redismock"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redismock/v8"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,41 +17,44 @@ var (
 )
 
 var (
-	key = "key"
-	val = "val"
+	key = "name"
+	val = "aayush"
 )
 
 func TestMain(m *testing.M) {
-	mr, err := miniredis.Run()
+	s, err := miniredis.Run()
 	if err != nil {
-		log.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		panic(err)
 	}
+	defer s.Close()
 
 	client = redis.NewClient(&redis.Options{
-		Addr: mr.Addr(),
+		Addr: s.Addr(),
 	})
 
-	code := m.Run()
-	os.Exit(code)
+	os.Exit(m.Run())
 }
 
 func TestSet(t *testing.T) {
+	ctx := context.TODO()
 	exp := time.Duration(0)
 
-	mock := redismock.NewNiceMock(client)
-	mock.On("Set", key, val, exp).Return(redis.NewStatusResult("", nil))
+	db, mock := redismock.NewClientMock()
+	mock.ExpectSet(key, val, exp).SetVal(val)
 
-	r := NewRedisRepository(mock)
-	err := r.Set(key, val, exp)
+	r := NewRedisRepository(db)
+	err := r.Set(ctx, key, val, exp)
 	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGet(t *testing.T) {
-	mock := redismock.NewNiceMock(client)
-	mock.On("Get", key).Return(redis.NewStringResult(val, nil))
+	ctx := context.TODO()
+	db, mock := redismock.NewClientMock()
+	mock.ExpectGet(key).SetVal(val)
 
-	r := NewRedisRepository(mock)
-	res, err := r.Get(key)
+	r := NewRedisRepository(db)
+	_, err := r.Get(ctx, key)
 	assert.NoError(t, err)
-	assert.Equal(t, val, res)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
